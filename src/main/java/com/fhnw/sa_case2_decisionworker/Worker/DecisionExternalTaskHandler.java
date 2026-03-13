@@ -42,7 +42,7 @@ public class DecisionExternalTaskHandler implements ExternalTaskHandler {
                 vars.put("decisionType", result.getDecisionType());
                 vars.put("shippingMethod", result.getShippingMethod());
                 vars.put("carrier", result.getCarrier());
-                vars.put("carrier", result.getRuleId());
+                vars.put("ruleID", result.getRuleId());
 
 
             externalTaskService.complete(externalTask, vars);

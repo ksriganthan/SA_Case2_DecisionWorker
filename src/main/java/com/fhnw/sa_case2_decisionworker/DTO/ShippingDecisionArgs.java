@@ -10,7 +10,9 @@ public class ShippingDecisionArgs {
 	public DecisionMade.DestinationCountry getCountry() {
 		return country;
 	}
-	public void setCountry(DecisionMade.DestinationCountry country) {}
+	public void setCountry(DecisionMade.DestinationCountry country) {
+		this.country = country;
+	}
 
 	public Integer getWeight() {
 		return weight;

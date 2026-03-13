@@ -11,7 +11,6 @@
 7. [Fehlerbehandlung & Retry-Strategie](#7-fehlerbehandlung--retry-strategie)
 8. [Konfiguration](#8-konfiguration)
 9. [Starten der Anwendung](#9-starten-der-anwendung)
-10. [Bekannte Einschränkungen / Hinweise](#10-bekannte-einschränkungen--hinweise)
 
 ---
 
@@ -27,7 +26,7 @@ Sobald eine Camunda-Prozessinstanz den Service-Task mit dem Topic `shippingDecis
 2. Er liest die **Prozessvariablen** `weight` (Gewicht des Pakets) und `country` (Zielland) aus dem BPMN-Kontext.
 3. Er sendet diese Daten per **HTTP POST** an einen externen Entscheidungsdienst (`/decision/make`).
 4. Der externe Dienst liefert eine **Versandentscheidung** zurück (Versandmethode, Spediteur, Entscheidungstyp, Regel-ID).
-5. Die Ergebnisse werden als **Prozessvariablen** zurück in die Camunda-Engine geschrieben, damit der Prozess weiterläuft (z. B. für einen nachgelagerten User-Task „A38-Formular ergänzen").
+5. Die Ergebnisse werden als **Prozessvariablen** zurück in die Camunda-Engine geschrieben, damit der Prozess weiterläuft.
 
 ---
 
@@ -295,8 +294,6 @@ spring.application.name=SA_Case2_DecisionWorker
 | Topic                    | `shippingDecision`                                                     |
 | Entscheidungs-API URL    | `http://localhost:8081/decision/make`                                  |
 
-> ⚠️ **Hinweis:** Die URLs und Zugangsdaten sind derzeit direkt im Code hardcodiert (`DecisionWorker.java`). Für produktive Umgebungen sollten diese in `application.properties` oder Umgebungsvariablen ausgelagert werden.
-
 ---
 
 ## 9. Starten der Anwendung
@@ -329,11 +326,4 @@ java -jar target/SA_Case2_DecisionWorker-0.0.1-SNAPSHOT.jar
 > **Wichtig:** Da der eigentliche Worker-Einstiegspunkt in `DecisionWorker.main()` liegt, muss sichergestellt sein, dass diese Klasse beim Start aufgerufen wird (entweder direkt oder durch Spring Boot Integration).
 
 ---
-
-## 10. Bekannte Einschränkungen / Hinweise
-
-- **`ShippingDecisionArgs.setCountry()`** enthält keinen Body (der Wert wird nicht gesetzt). Dies ist ein Bug – die Methode muss `this.country = country;` enthalten, damit das Feld korrekt an den externen Dienst übermittelt wird.
-- **`carrier` wird zweimal** in die Variablen-Map geschrieben (einmal mit `getCarrier()`, einmal mit `getRuleId()`). Der zweite Eintrag überschreibt den ersten. `ruleId` sollte unter dem Schlüssel `"ruleId"` gespeichert werden.
-- Die **Camunda-Engine-Zugangsdaten** (Benutzername/Passwort in der URL) sollten nicht im Quellcode stehen.
-- `DecisionWorker` und `SaCase2DecisionWorkerApplication` sind zwei separate Einstiegspunkte – die Integration der Worker-Logik in den Spring Boot Lifecycle (z. B. via `CommandLineRunner` oder `@PostConstruct`) würde die Anwendung konsistenter machen.
 
