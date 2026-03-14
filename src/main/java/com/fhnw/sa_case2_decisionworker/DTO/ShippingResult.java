@@ -1,18 +1,6 @@
 package com.fhnw.sa_case2_decisionworker.DTO;
 
 public class ShippingResult {
-    public enum DecisionType {
-        AUTOMATIC,
-        MANUAL
-    }
-
-    public enum ShippingMethod {
-        SPECIAL, NORMAL, AIR
-    }
-
-    public enum DestinationCountry {
-        ARG, JAP, DE, CH, RUS
-    }
 
     private DecisionMade.DecisionType decisionType; // Flag
     private DecisionMade.ShippingMethod shippingMethod; // Action
