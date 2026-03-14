@@ -126,7 +126,6 @@ Wird vom `DecisionService` befüllt und per REST an `POST /decision/make` gesend
 | `destinationCountry` | `DecisionMade.DestinationCountry` | Zielland des Pakets            |
 | `weight`             | `Integer`                         | Gewicht des Pakets in Gramm/kg |
 
-> **Hinweis:** Das Feld heißt `destinationCountry` (nicht `country`), damit es mit dem Feld-Namen des externen Dienstes (`DecisionArgs.destinationCountry`) übereinstimmt.
 
 ### 5.2 `DecisionMade` – Response vom externen Dienst
 
@@ -205,7 +204,7 @@ Bei einem unbekannten Wert wird eine `IllegalArgumentException` geworfen (→ ke
 `DecisionService.sendShippingOrder()` prüft die Eingaben:
 
 - `country` darf nicht `null` oder leer sein → sonst `IllegalArgumentException`
-- `weight` muss größer als `0` sein → sonst `IllegalArgumentException`
+- `weight` muss grösser als `0` sein → sonst `IllegalArgumentException`
 
 ### Schritt 5 – Mapping und REST-Aufruf (DecisionApiClient)
 
@@ -248,9 +247,9 @@ Der externe Dienst antwortet mit einem `DecisionMade`-JSON-Objekt.
 
 Der `DecisionService` mappt dieses Ergebnis in ein `ShippingResult`-Objekt und gibt es zurück.
 
-### Schritt 7 – Prozessvariablen setzen & Task abschließen
+### Schritt 7 – Prozessvariablen setzen & Task abschliessen
 
-Der `DecisionExternalTaskHandler` schreibt die Ergebnisse als **plain Strings** in eine Variable-Map und **schließt den External Task** ab:
+Der `DecisionExternalTaskHandler` schreibt die Ergebnisse als **plain Strings** in eine Variable-Map und **schliesst den External Task** ab:
 
 ```
 decisionType   → z. B. "AUTOMATIC" oder "MANUAL"
