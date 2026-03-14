@@ -37,12 +37,12 @@ public class DecisionExternalTaskHandler implements ExternalTaskHandler {
             );
 
             Map<String, Object> vars = new HashMap<>();
-
-                // Daten für euren späteren UserTask "A38-Formular ergänzen ..."
-                vars.put("decisionType", result.getDecisionType());
-                vars.put("shippingMethod", result.getShippingMethod());
-                vars.put("carrier", result.getCarrier());
-                vars.put("ruleID", result.getRuleId());
+             // Als plain String speichern, damit Camunda ${decisionType == 'MANUAL'} auswerten kann
+            // Bei MANUAL-Entscheidungen können shippingMethod/carrier/ruleId null sein
+            vars.put("decisionType",   result.getDecisionType()   != null ? result.getDecisionType().name()   : null);
+            vars.put("shippingMethod", result.getShippingMethod() != null ? result.getShippingMethod().name() : null);
+            vars.put("carrier",  result.getCarrier());
+            vars.put("ruleID",   result.getRuleId());
 
 
             externalTaskService.complete(externalTask, vars);

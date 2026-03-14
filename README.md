@@ -104,11 +104,11 @@ src/main/java/com/fhnw/sa_case2_decisionworker/
 
 | Technologie                         | Version  | Verwendungszweck                              |
 |--------------------------------------|----------|-----------------------------------------------|
-| **Java**                             | 21       | Programmiersprache                            |
+| **Java**                             | 25       | Programmiersprache                            |
 | **Spring Boot**                      | 4.0.3    | Anwendungsrahmen, Dependency Injection        |
 | **Camunda External Task Client**     | 1.3.1    | Polling & Kommunikation mit der BPM-Engine   |
 | **Jersey (JAX-RS Client)**           | 4.0.2    | HTTP-REST-Client für externen API-Aufruf     |
-| **Jackson Databind**                 | (managed)| JSON-Serialisierung / -Deserialisierung       |
+| **Jackson Databind**                 | 2.20.2   | JSON-Serialisierung / -Deserialisierung       |
 | **SLF4J Simple**                     | 1.6.1    | Logging                                       |
 | **JAXB API**                         | 2.3.1    | XML-Binding (Camunda-Abhängigkeit)           |
 | **Maven**                            | (Wrapper)| Build-Tool                                    |
@@ -121,10 +121,12 @@ src/main/java/com/fhnw/sa_case2_decisionworker/
 
 Wird vom `DecisionService` befüllt und per REST an `POST /decision/make` gesendet.
 
-| Feld      | Typ                        | Beschreibung                          |
-|-----------|----------------------------|---------------------------------------|
-| `country` | `DecisionMade.DestinationCountry` | Zielland des Pakets           |
-| `weight`  | `Integer`                  | Gewicht des Pakets in Gramm/kg        |
+| Feld                 | Typ                               | Beschreibung                   |
+|----------------------|-----------------------------------|--------------------------------|
+| `destinationCountry` | `DecisionMade.DestinationCountry` | Zielland des Pakets            |
+| `weight`             | `Integer`                         | Gewicht des Pakets in Gramm/kg |
+
+> **Hinweis:** Das Feld heißt `destinationCountry` (nicht `country`), damit es mit dem Feld-Namen des externen Dienstes (`DecisionArgs.destinationCountry`) übereinstimmt.
 
 ### 5.2 `DecisionMade` – Response vom externen Dienst
 
@@ -133,9 +135,11 @@ Enthält die Versandentscheidung des externen Systems.
 | Feld             | Typ              | Beschreibung                                        |
 |------------------|------------------|-----------------------------------------------------|
 | `decisionType`   | `DecisionType`   | `AUTOMATIC` oder `MANUAL`                          |
-| `shippingMethod` | `ShippingMethod` | `SPECIAL`, `NORMAL` oder `AIR`                     |
-| `carrier`        | `String`         | Name des beauftragten Spediteurs                   |
-| `ruleId`         | `Long`           | ID der angewendeten Entscheidungsregel             |
+| `shippingMethod` | `ShippingMethod` | `SPECIAL`, `NORMAL` oder `AIR` – **kann `null` sein bei `MANUAL`** |
+| `carrier`        | `String`         | Name des beauftragten Spediteurs – **kann `null` sein bei `MANUAL`** |
+| `ruleId`         | `Long`           | ID der angewendeten Entscheidungsregel – **kann `null` sein bei `MANUAL`** |
+
+> **Wichtig:** Ist `decisionType == MANUAL`, liefert der externe Dienst `shippingMethod`, `carrier` und `ruleId` als `null`. Diese Felder werden dann im nachgelagerten User-Task manuell befüllt.
 
 ### 5.3 `ShippingResult` – Internes Ergebnis-DTO
 
@@ -145,13 +149,6 @@ Wird intern vom `DecisionService` zurückgegeben und enthält dieselben Felder w
 
 **`DestinationCountry`** (Unterstützte Zielländer):
 
-| Wert  | Land        |
-|-------|-------------|
-| `DE`  | Deutschland |
-| `CH`  | Schweiz     |
-| `ARG` | Argentinien |
-| `JAP` | Japan       |
-| `RUS` | Russland    |
 
 **`ShippingMethod`** (Versandmethoden):
 
@@ -176,16 +173,12 @@ Wird intern vom `DecisionService` zurückgegeben und enthält dieselben Felder w
 
 `SaCase2DecisionWorkerApplication` startet den Spring Boot Kontext. `DecisionWorker.main()` wird separat (oder über Spring) aufgerufen und baut den Camunda-Client auf:
 
-```
-Camunda Engine URL : http://group6:p5TuHbjEadLeT6L@192.168.111.3:8080/engine-rest
-Async Timeout      : 1000 ms
-```
 
 ### Schritt 2 – Subscription auf Topic
 
 Der Worker abonniert das Camunda-Topic **`shippingDecision`** mit einer Lock-Dauer von **1000 ms**:
 
-```
+```java
 client.subscribe("shippingDecision")
       .lockDuration(1000)
       .handler(new DecisionExternalTaskHandler(...))
@@ -200,10 +193,12 @@ Sobald die Camunda Engine einen Task mit dem Topic `shippingDecision` erzeugt, r
 
 ```
 weight  → Long    (Gewicht des Pakets, z. B. 5000)
-country → String  (Zielland als Enum-Name, z. B. "DE")
+country → String  (Zielland – Kürzel oder deutscher Name, z. B. "ARG" oder "Argentinien")
 ```
 
-Das `country`-String wird mit `DecisionMade.DestinationCountry.valueOf(...)` in einen Enum-Wert konvertiert.
+Das `country`-String wird mit `DecisionMade.DestinationCountry.fromString(...)` in einen Enum-Wert konvertiert.
+Diese Methode akzeptiert sowohl Kürzel (`ARG`, `DE`, ...) als auch deutsche Vollnamen (`Argentinien`, `Deutschland`, ...).
+Bei einem unbekannten Wert wird eine `IllegalArgumentException` geworfen (→ kein Retry, Fehler in Camunda gemeldet).
 
 ### Schritt 4 – Fachliche Validierung (DecisionService)
 
@@ -222,21 +217,32 @@ POST http://localhost:8081/decision/make
 Content-Type: application/json
 
 {
-  "country": "DE",
+  "destinationCountry": "ARG",
   "weight": 5000
 }
 ```
 
 ### Schritt 6 – Antwort verarbeiten
 
-Der externe Dienst antwortet mit einem `DecisionMade`-JSON-Objekt, z. B.:
+Der externe Dienst antwortet mit einem `DecisionMade`-JSON-Objekt.
 
+**Beispiel AUTOMATIC:**
 ```json
 {
   "decisionType": "AUTOMATIC",
-  "shippingMethod": "NORMAL",
-  "carrier": "DHL",
-  "ruleId": 42
+  "shippingMethod": "SPECIAL",
+  "carrier": "SpecialCarrier",
+  "ruleId": 1
+}
+```
+
+**Beispiel MANUAL** (z. B. bei Russland):
+```json
+{
+  "decisionType": "MANUAL",
+  "shippingMethod": null,
+  "carrier": null,
+  "ruleId": null
 }
 ```
 
@@ -244,14 +250,18 @@ Der `DecisionService` mappt dieses Ergebnis in ein `ShippingResult`-Objekt und g
 
 ### Schritt 7 – Prozessvariablen setzen & Task abschließen
 
-Der `DecisionExternalTaskHandler` schreibt die Ergebnisse in eine Variable-Map und **schließt den External Task** ab:
+Der `DecisionExternalTaskHandler` schreibt die Ergebnisse als **plain Strings** in eine Variable-Map und **schließt den External Task** ab:
 
 ```
-decisionType   → z. B. "AUTOMATIC"
-shippingMethod → z. B. "NORMAL"
-carrier        → z. B. "DHL"
-ruleId         → z. B. 42
+decisionType   → z. B. "AUTOMATIC" oder "MANUAL"
+shippingMethod → z. B. "SPECIAL" oder null (bei MANUAL)
+carrier        → z. B. "SpecialCarrier" oder null (bei MANUAL)
+ruleID         → z. B. 1 oder null (bei MANUAL)
 ```
+
+> **Wichtig:** Enum-Werte werden als `String` (`.name()`) gespeichert – **nicht** als Java-Objekt.
+> Nur so kann die Camunda Engine den BPMN-Ausdruck `${decisionType == 'MANUAL'}` korrekt auswerten.
+> Null-Werte (bei `MANUAL`) werden sicher übergeben, da die Konvertierung null-prüft (`!= null ? .name() : null`)
 
 Diese Variablen stehen dem weiteren BPMN-Prozess (z. B. User-Task „A38-Formular ergänzen") zur Verfügung.
 
@@ -300,10 +310,10 @@ spring.application.name=SA_Case2_DecisionWorker
 
 ### Voraussetzungen
 
-- Java 21 installiert
+- Java 25 installiert
 - Maven (oder Maven Wrapper `mvnw` verwenden)
 - Camunda BPM Engine unter `http://192.168.111.3:8080` erreichbar
-- Externer Entscheidungsdienst unter `http://localhost:8081/decision/make` erreichbar
+- Externer Entscheidungsdienst (`SA_Case2_DecisionApplication`) unter `http://localhost:8081/decision/make` erreichbar und gestartet
 
 ### Build
 
@@ -323,7 +333,6 @@ oder als JAR:
 java -jar target/SA_Case2_DecisionWorker-0.0.1-SNAPSHOT.jar
 ```
 
-> **Wichtig:** Da der eigentliche Worker-Einstiegspunkt in `DecisionWorker.main()` liegt, muss sichergestellt sein, dass diese Klasse beim Start aufgerufen wird (entweder direkt oder durch Spring Boot Integration).
+> **Wichtig:** Da der eigentliche Worker-Einstiegspunkt in `DecisionWorker.main()` liegt, muss sichergestellt sein, dass diese Klasse beim Start aufgerufen wird (entweder direkt über IntelliJ Run-Konfiguration oder durch Spring Boot Integration).
 
 ---
-

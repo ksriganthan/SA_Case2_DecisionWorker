@@ -4,14 +4,14 @@ package com.fhnw.sa_case2_decisionworker.DTO;
 // Geht an die Spedition via REST-SERVICE
 public class ShippingDecisionArgs {
 
-	private DecisionMade.DestinationCountry country;
+	private DecisionMade.DestinationCountry destinationCountry;
 	private Integer weight;
 
-	public DecisionMade.DestinationCountry getCountry() {
-		return country;
+	public DecisionMade.DestinationCountry getDestinationCountry() {
+		return destinationCountry;
 	}
-	public void setCountry(DecisionMade.DestinationCountry country) {
-		this.country = country;
+	public void setDestinationCountry(DecisionMade.DestinationCountry destinationCountry) {
+		this.destinationCountry = destinationCountry;
 	}
 
 	public Integer getWeight() {
