@@ -14,10 +14,10 @@ import java.util.Map;
 
 public class DecisionExternalTaskHandler implements ExternalTaskHandler {
 
-    private final DecisionService shippingService;
+    private final DecisionService decisionService;
 
-    public DecisionExternalTaskHandler(DecisionService shippingService) {
-        this.shippingService = shippingService;
+    public DecisionExternalTaskHandler(DecisionService decisionService) {
+        this.decisionService = decisionService;
     }
 
     @Override
@@ -31,7 +31,7 @@ public class DecisionExternalTaskHandler implements ExternalTaskHandler {
         System.out.println("country       : " + country);
         try {
 
-            ShippingResult result = shippingService.sendShippingOrder(
+            ShippingResult result = decisionService.sendDecisionOrder(
                     country,
                     weight
             );

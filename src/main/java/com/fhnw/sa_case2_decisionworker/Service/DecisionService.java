@@ -16,7 +16,7 @@ public class DecisionService {
     }
 
 
-    public ShippingResult sendShippingOrder(DecisionMade.DestinationCountry country, Long weight) {
+    public ShippingResult sendDecisionOrder(DecisionMade.DestinationCountry country, Long weight) {
 
         // minimale fachliche Validierung
         if (country == null || country.name().isEmpty()) {
@@ -26,7 +26,7 @@ public class DecisionService {
             throw new IllegalArgumentException("weight must be > 0");
         }
 
-        // Mapping -> Request DTO für Spedition
+        // Mapping -> Request DTO für Decision API
         ShippingDecisionArgs req = new ShippingDecisionArgs();
         req.setDestinationCountry(country);
         req.setWeight(Math.toIntExact(weight));
