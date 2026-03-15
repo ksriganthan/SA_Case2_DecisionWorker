@@ -3,7 +3,7 @@ package com.fhnw.sa_case2_decisionworker.DTO;
 public class ShippingResult {
 
     private DecisionMade.DecisionType decisionType; // Flag
-    private DecisionMade.ShippingMethod shippingMethod; // Action
+    private DecisionMade.ShippingType shippingType; // Action
     private String carrier;
     private Long ruleId;
 
@@ -14,11 +14,11 @@ public class ShippingResult {
         this.decisionType = decisionType;
     }
 
-    public DecisionMade.ShippingMethod getShippingMethod() {
-        return shippingMethod;
+    public DecisionMade.ShippingType getShippingType() {
+        return shippingType;
     }
-    public void setShippingMethod(DecisionMade.ShippingMethod shippingMethod) {
-        this.shippingMethod = shippingMethod;
+    public void setShippingMethod(DecisionMade.ShippingType shippingType) {
+        this.shippingType = shippingType;
     }
 
     public String getCarrier() {

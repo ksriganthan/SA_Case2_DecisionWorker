@@ -6,7 +6,7 @@ public class DecisionMade {
         MANUAL
     }
 
-    public enum ShippingMethod {
+    public enum ShippingType {
         SPECIAL, NORMAL, AIR
     }
 
@@ -15,7 +15,7 @@ public class DecisionMade {
     }
 
     private DecisionType decisionType; // Flag
-    private ShippingMethod shippingMethod; // Action
+    private ShippingType shippingType; // Action
     private String carrier;
     private Long ruleId;
 
@@ -26,11 +26,11 @@ public class DecisionMade {
         this.decisionType = decisionType;
     }
 
-    public ShippingMethod getShippingMethod() {
-        return shippingMethod;
+    public ShippingType getShippingMethod() {
+        return shippingType;
     }
-    public void setShippingMethod(ShippingMethod shippingMethod) {
-        this.shippingMethod = shippingMethod;
+    public void setShippingMethod(ShippingType shippingType) {
+        this.shippingType = shippingType;
     }
 
     public String getCarrier() {
