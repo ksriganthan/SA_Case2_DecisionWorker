@@ -29,7 +29,7 @@ public class DecisionService {
         // Mapping -> Request DTO für Spedition
         ShippingDecisionArgs req = new ShippingDecisionArgs();
         req.setDestinationCountry(country);
-        req.setWeight(Math.toIntExact(weight)); // BPMN: long -> API: Integer
+        req.setWeight(weight);
 
         DecisionMade response = apiClient.requestConsignment(req);
 

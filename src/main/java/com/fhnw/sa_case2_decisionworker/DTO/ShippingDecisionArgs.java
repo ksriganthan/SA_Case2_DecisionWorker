@@ -5,7 +5,7 @@ package com.fhnw.sa_case2_decisionworker.DTO;
 public class ShippingDecisionArgs {
 
 	private DecisionMade.DestinationCountry destinationCountry;
-	private Integer weight;
+	private Long weight;
 
 	public DecisionMade.DestinationCountry getDestinationCountry() {
 		return destinationCountry;
@@ -14,11 +14,11 @@ public class ShippingDecisionArgs {
 		this.destinationCountry = destinationCountry;
 	}
 
-	public Integer getWeight() {
+	public Long getWeight() {
 		return weight;
 	}
 
-	public void setWeight(Integer weight) {
+	public void setWeight(Long weight) {
 		this.weight = weight;
 	}
 
