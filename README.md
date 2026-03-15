@@ -39,7 +39,7 @@ Sobald eine Camunda-Prozessinstanz den Service-Task mit dem Topic `shippingDecis
 │                                                     │
 │   BPMN-Prozess → Service-Task (Topic:              │
 │                  "shippingDecision")                │
-│   Prozessvariablen: weight (Long), country (Enum)  │
+│   Prozessvariablen: weight (Long), country (String)│
 └───────────────────────┬─────────────────────────────┘
                         │  Long Polling (HTTP)
                         ▼
@@ -65,10 +65,11 @@ Sobald eine Camunda-Prozessinstanz den Service-Task mit dem Topic `shippingDecis
                                    ▼
 ┌─────────────────────────────────────────────────────┐
 │         Externer Entscheidungsdienst                │
+│    (SA_Case2_DecisionApplication)                   │
 │         (http://localhost:8081/decision/make)       │
 │                                                     │
-│  Request:  { country, weight }                      │
-│  Response: { decisionType, shippingMethod,          │
+│  Request:  { destinationCountry, weight }           │
+│  Response: { decisionType, shippingType,            │
 │              carrier, ruleId }                      │
 └─────────────────────────────────────────────────────┘
 ```
@@ -94,7 +95,7 @@ src/main/java/com/fhnw/sa_case2_decisionworker/
 │
 └── DTO/
     ├── ShippingDecisionArgs.java            # Request-DTO → an externen Dienst
-    ├── DecisionMade.java                   # Response-DTO ← vom externen Dienst
+    ├── DecisionMade.java                   # Response-DTO ← vom externen Dienst (inkl. Enums)
     └── ShippingResult.java                 # Internes Ergebnis-DTO → an Camunda
 ```
 
@@ -129,27 +130,43 @@ Wird vom `DecisionService` befüllt und per REST an `POST /decision/make` gesend
 
 ### 5.2 `DecisionMade` – Response vom externen Dienst
 
-Enthält die Versandentscheidung des externen Systems.
+Enthält die Versandentscheidung des externen Systems. Diese Klasse dient als **reines Transport-DTO** für die JSON-Deserialisierung der HTTP-Antwort.
+Sie hält ausserdem alle gemeinsam genutzten **Enum-Definitionen** (`DecisionType`, `ShippingType`, `DestinationCountry`).
 
-| Feld             | Typ              | Beschreibung                                        |
-|------------------|------------------|-----------------------------------------------------|
-| `decisionType`   | `DecisionType`   | `AUTOMATIC` oder `MANUAL`                          |
-| `shippingMethod` | `ShippingMethod` | `SPECIAL`, `NORMAL` oder `AIR` – **kann `null` sein bei `MANUAL`** |
-| `carrier`        | `String`         | Name des beauftragten Spediteurs – **kann `null` sein bei `MANUAL`** |
-| `ruleId`         | `Long`           | ID der angewendeten Entscheidungsregel – **kann `null` sein bei `MANUAL`** |
+| Feld             | Typ            | Beschreibung                                                                |
+|------------------|----------------|-----------------------------------------------------------------------------|
+| `decisionType`   | `DecisionType` | `AUTOMATIC` oder `MANUAL`                                                  |
+| `shippingType`   | `ShippingType` | `SPECIAL`, `NORMAL` oder `AIR` – **kann `null` sein bei `MANUAL`**         |
+| `carrier`        | `String`       | Name des beauftragten Spediteurs – **kann `null` sein bei `MANUAL`**       |
+| `ruleId`         | `Long`         | ID der angewendeten Entscheidungsregel – **kann `null` sein bei `MANUAL`** |
 
-> **Wichtig:** Ist `decisionType == MANUAL`, liefert der externe Dienst `shippingMethod`, `carrier` und `ruleId` als `null`. Diese Felder werden dann im nachgelagerten User-Task manuell befüllt.
+> **Wichtig:** Ist `decisionType == MANUAL`, liefert der externe Dienst `shippingType`, `carrier` und `ruleId` als `null`. Diese Felder werden dann im nachgelagerten User-Task manuell befüllt.
 
 ### 5.3 `ShippingResult` – Internes Ergebnis-DTO
 
-Wird intern vom `DecisionService` zurückgegeben und enthält dieselben Felder wie `DecisionMade`. Dient der sauberen Schichttrennung.
+Wird intern vom `DecisionService` zurückgegeben und enthält dieselben Felder wie `DecisionMade`.
 
-### 5.4 Enumerationen
+**Warum ein separates DTO?**
+Auch wenn `ShippingResult` und `DecisionMade` strukturell gleich aussehen, erfüllen sie bewusst unterschiedliche Rollen im System:
+
+- `DecisionMade` repräsentiert die **externe HTTP-Antwort** des Entscheidungsdienstes. Es ist eng an die JSON-Struktur der API gekoppelt und darf sich ändern, wenn sich die externe Schnittstelle ändert.
+- `ShippingResult` ist das **interne Fachmodell**, das der `DecisionService` an den `DecisionExternalTaskHandler` zurückgibt. Es entkoppelt die interne Logik von der externen API – sollte sich die externe Schnittstelle ändern (z. B. neue Felder, umbenannte Properties), muss nur das Mapping im `DecisionService` angepasst werden, ohne den restlichen Code zu berühren.
+
+Diese Trennung folgt dem Prinzip der **Schichtenarchitektur** und verhindert, dass externe Datenstrukturen direkt durch alle Schichten propagiert werden.
+
+### 5.4 Enumerationen (definiert in `DecisionMade`)
 
 **`DestinationCountry`** (Unterstützte Zielländer):
 
+| Wert  | Land         |
+|-------|--------------|
+| `ARG` | Argentinien  |
+| `JAP` | Japan        |
+| `DE`  | Deutschland  |
+| `CH`  | Schweiz      |
+| `RUS` | Russland     |
 
-**`ShippingMethod`** (Versandmethoden):
+**`ShippingType`** (Versandmethoden):
 
 | Wert      | Beschreibung         |
 |-----------|----------------------|
@@ -170,8 +187,14 @@ Wird intern vom `DecisionService` zurückgegeben und enthält dieselben Felder w
 
 ### Schritt 1 – Anwendungsstart
 
-`SaCase2DecisionWorkerApplication` startet den Spring Boot Kontext. `DecisionWorker.main()` wird separat (oder über Spring) aufgerufen und baut den Camunda-Client auf:
+`DecisionWorker.main()` wird direkt aufgerufen (unabhängig vom Spring Boot Kontext) und baut den Camunda External Task Client auf:
 
+```java
+ExternalTaskClient client = ExternalTaskClient.create()
+    .baseUrl("http://xxx@192.168.111.3:8080/engine-rest")
+    .asyncResponseTimeout(1000)
+    .build();
+```
 
 ### Schritt 2 – Subscription auf Topic
 
@@ -191,19 +214,18 @@ Solange kein passender Task vorhanden ist, wartet der Client per **Long Polling*
 Sobald die Camunda Engine einen Task mit dem Topic `shippingDecision` erzeugt, ruft der `DecisionExternalTaskHandler` die `execute()`-Methode auf und liest die BPMN-Prozessvariablen:
 
 ```
-weight  → Long    (Gewicht des Pakets, z. B. 5000)
-country → String  (Zielland – Kürzel oder deutscher Name, z. B. "ARG" oder "Argentinien")
+weight  → Long    (Gewicht des Pakets, z. B. 100)
+country → String  (Zielland als Enum-Kürzel, z. B. "ARG", "RUS", "CH")
 ```
 
-Das `country`-String wird mit `DecisionMade.DestinationCountry.fromString(...)` in einen Enum-Wert konvertiert.
-Diese Methode akzeptiert sowohl Kürzel (`ARG`, `DE`, ...) als auch deutsche Vollnamen (`Argentinien`, `Deutschland`, ...).
-Bei einem unbekannten Wert wird eine `IllegalArgumentException` geworfen (→ kein Retry, Fehler in Camunda gemeldet).
+Das `country`-String wird direkt per `DecisionMade.DestinationCountry.valueOf(...)` in einen Enum-Wert konvertiert.
+Bei einem unbekannten Wert wirft `valueOf()` eine `IllegalArgumentException` (→ kein Retry, Fehler in Camunda gemeldet).
 
 ### Schritt 4 – Fachliche Validierung (DecisionService)
 
-`DecisionService.sendShippingOrder()` prüft die Eingaben:
+`DecisionService.sendDecisionOrder()` prüft die Eingaben:
 
-- `country` darf nicht `null` oder leer sein → sonst `IllegalArgumentException`
+- `country` darf nicht `null` sein → sonst `IllegalArgumentException`
 - `weight` muss grösser als `0` sein → sonst `IllegalArgumentException`
 
 ### Schritt 5 – Mapping und REST-Aufruf (DecisionApiClient)
@@ -224,12 +246,13 @@ Content-Type: application/json
 ### Schritt 6 – Antwort verarbeiten
 
 Der externe Dienst antwortet mit einem `DecisionMade`-JSON-Objekt.
+Der `DecisionService` loggt die erhaltene Antwort und mappt sie in ein `ShippingResult`-Objekt.
 
 **Beispiel AUTOMATIC:**
 ```json
 {
   "decisionType": "AUTOMATIC",
-  "shippingMethod": "SPECIAL",
+  "shippingType": "SPECIAL",
   "carrier": "SpecialCarrier",
   "ruleId": 1
 }
@@ -239,13 +262,11 @@ Der externe Dienst antwortet mit einem `DecisionMade`-JSON-Objekt.
 ```json
 {
   "decisionType": "MANUAL",
-  "shippingMethod": null,
+  "shippingType": null,
   "carrier": null,
   "ruleId": null
 }
 ```
-
-Der `DecisionService` mappt dieses Ergebnis in ein `ShippingResult`-Objekt und gibt es zurück.
 
 ### Schritt 7 – Prozessvariablen setzen & Task abschliessen
 
@@ -253,14 +274,15 @@ Der `DecisionExternalTaskHandler` schreibt die Ergebnisse als **plain Strings** 
 
 ```
 decisionType   → z. B. "AUTOMATIC" oder "MANUAL"
-shippingMethod → z. B. "SPECIAL" oder null (bei MANUAL)
+shippingType   → z. B. "SPECIAL" oder null (bei MANUAL)
 carrier        → z. B. "SpecialCarrier" oder null (bei MANUAL)
-ruleID         → z. B. 1 oder null (bei MANUAL)
+ruleId         → z. B. 1 oder null (bei MANUAL)
 ```
 
 > **Wichtig:** Enum-Werte werden als `String` (`.name()`) gespeichert – **nicht** als Java-Objekt.
 > Nur so kann die Camunda Engine den BPMN-Ausdruck `${decisionType == 'MANUAL'}` korrekt auswerten.
-> Null-Werte (bei `MANUAL`) werden sicher übergeben, da die Konvertierung null-prüft (`!= null ? .name() : null`)
+> Null-Werte (bei `MANUAL`) werden sicher übergeben, da die Konvertierung null-prüft (`!= null ? .name() : null`).
+> Dadurch wird der `NullPointerException`, die bei direktem `.toString()` auf `null`-Enums auftreten würde, zuverlässig verhindert.
 
 Diese Variablen stehen dem weiteren BPMN-Prozess (z. B. User-Task „A38-Formular ergänzen") zur Verfügung.
 
@@ -295,13 +317,13 @@ spring.application.name=SA_Case2_DecisionWorker
 
 ### Endpunkte (hardcodiert in `DecisionWorker.java`)
 
-| Eigenschaft              | Wert                                                                   |
-|--------------------------|------------------------------------------------------------------------|
-| Camunda Engine URL       | `http://group6:p5TuHbjEadLeT6L@192.168.111.3:8080/engine-rest`        |
-| Async Response Timeout   | `1000 ms`                                                              |
-| Lock Duration            | `1000 ms`                                                              |
-| Topic                    | `shippingDecision`                                                     |
-| Entscheidungs-API URL    | `http://localhost:8081/decision/make`                                  |
+| Eigenschaft              | Wert                                        |
+|--------------------------|---------------------------------------------|
+| Camunda Engine URL       | `http://xxx@192.168.111.3:8080/engine-rest` |
+| Async Response Timeout   | `1000 ms`                                   |
+| Lock Duration            | `1000 ms`                                   |
+| Topic                    | `shippingDecision`                          |
+| Entscheidungs-API URL    | `http://localhost:8081/decision/make`       |
 
 ---
 
@@ -311,7 +333,7 @@ spring.application.name=SA_Case2_DecisionWorker
 
 - Java 25 installiert
 - Maven (oder Maven Wrapper `mvnw` verwenden)
-- Camunda BPM Engine unter `http://192.168.111.3:8080` erreichbar
+- Camunda BPM Engine erreichbar
 - Externer Entscheidungsdienst (`SA_Case2_DecisionApplication`) unter `http://localhost:8081/decision/make` erreichbar und gestartet
 
 ### Build
@@ -332,6 +354,7 @@ oder als JAR:
 java -jar target/SA_Case2_DecisionWorker-0.0.1-SNAPSHOT.jar
 ```
 
-> **Wichtig:** Da der eigentliche Worker-Einstiegspunkt in `DecisionWorker.main()` liegt, muss sichergestellt sein, dass diese Klasse beim Start aufgerufen wird (entweder direkt über IntelliJ Run-Konfiguration oder durch Spring Boot Integration).
+> **Wichtig:** Der eigentliche Worker-Einstiegspunkt liegt in `DecisionWorker.main()`. Diese Klasse wird direkt über die IntelliJ Run-Konfiguration gestartet – **nicht** über den Spring Boot Application-Einstiegspunkt. Spring Boot wird lediglich für den Anwendungskontext (Dependency Injection, Konfiguration) verwendet.
 
 ---
+
